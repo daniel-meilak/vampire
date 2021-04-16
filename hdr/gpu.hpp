@@ -17,7 +17,15 @@ namespace gpu{
    //-----------------------------------------------------------------------------
    extern bool acceleration; // flag to enable gpu_acceleration
    extern bool cpu_stats; // flag to calculate stats using cpu
+   extern bool initialized; // flag to check for successful initialization
+
+   extern int num_threads; // number of threads to run per kernel on main device
+   extern int num_threads_other; // as above on other device
+   extern int platform; // which platform to use for acceleration (OpenCL)
+   extern int platform_other; // other platform to use for some calculations (OpenCL)
    extern int device; // int specifying gpu device to use for simulation
+   extern int device_other; // other device to use (under platform_other)
+
 
    //-----------------------------------------------------------------------------
    // Functions for GPU acceleration
@@ -26,6 +34,8 @@ namespace gpu{
    extern void initialize();
    extern void llg_heun();
    extern void finalize();
+   extern void transfer_spin_positions_from_gpu_to_cpu();
+   extern void transfer_dipole_fields_from_cpu_to_gpu();
 
    //-----------------------------------------------------------------------------
    // Functions for GPU configuration output

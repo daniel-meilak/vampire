@@ -70,13 +70,13 @@ namespace err
       terminaltextcolor(WHITE);
       zlog << zTs() << "Fatal error on rank: " << vmpi::my_rank << ": Aborting program." << std::endl;
       // concatenate log and sort
-      #ifdef WIN_COMPILE
+      /*#ifdef WIN_COMPILE
          system("type log.* 2>NUL | sort > log");
       #else
          system("ls log.* | xargs cat | sort -n > log");
-      #endif
+      #endif*/
 
-      MPI::COMM_WORLD.Abort(EXIT_FAILURE);
+      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
       // MPI program dies ungracefully here
       #endif
 
@@ -90,7 +90,37 @@ namespace err
       exit(EXIT_FAILURE);
    }
 
+   //-----------------------------------------------------------------------------------------
+   // Parallel exit function calling MPI_Finalise (must be called by all processes)
+   //-----------------------------------------------------------------------------------------
+   void v_parallel_all_exit(std::string message){
+
+      #ifdef MPICF
+
+      // Print non-blank error message to screen and log
+      std::string blank = "";
+      if( message != blank ){
+         zlog << zTs() << message << std::endl;
+      }
+      zlog << zTs() << "Fatal error: Aborting program." << std::endl;
+      terminaltextcolor(RED);
+      std::cout << "Fatal error: Aborting program. See log file for details." << std::endl;
+      terminaltextcolor(WHITE);
+
+      // Wait for everyone
+      vmpi::barrier();
+
+      // Now finalise MPI
+      vmpi::finalise();
+      #endif
+
+      // Now exit program disgracefully
+      exit(EXIT_FAILURE);
+   }
+
+   //-----------------------------------------------------------------------------------------
    /// zexit with error message
+   //-----------------------------------------------------------------------------------------
    void zexit(std::string message){
 
       // check calling of routine if error checking is activated
@@ -105,13 +135,7 @@ namespace err
       zlog << zTs() << "Fatal error on rank " << vmpi::my_rank << ": " << message << std::endl;
       zlog << zTs() << "Aborting program." << std::endl;
 
-      // concatenate log and sort
-      #ifdef WIN_COMPILE
-         system("type log.* 2>NUL | sort > log");
-      #else
-         system("ls log.* | xargs cat | sort -n > log");
-      #endif
-      MPI::COMM_WORLD.Abort(EXIT_FAILURE);
+      MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
       // MPI program dies ungracefully here
       #else
          // Print Error message to screen and log

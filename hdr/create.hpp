@@ -52,6 +52,8 @@
 #include <cmath>
 
 // Vampire headers
+#include "create_atoms_class.hpp" // class definition for atoms in create module
+#include "neighbours.hpp"
 #include "unitcell.hpp"
 
 /// @namespace
@@ -66,7 +68,6 @@ namespace cs{
 	// System Dimensions
 	extern double system_dimensions[3];
 	extern bool pbc[3];
-	extern bool SelectMaterialByZHeight;
 	extern bool SelectMaterialByGeometry;
 	extern unsigned int total_num_unit_cells[3];
 	extern unsigned int local_num_unit_cells[3];
@@ -85,6 +86,7 @@ namespace cs{
 	extern bool single_spin;
 	extern int system_creation_flags[10];
 	extern bool fill_core_shell;
+   extern bool core_shell_particles;
 
 	// Variables for interfacial roughness control
 	extern bool interfacial_roughness;
@@ -102,8 +104,6 @@ namespace cs{
    extern bool multilayers;
    extern int num_multilayers;
    extern bool multilayer_height_category; // enable height categorization by multilayer number
-
-
 
 	class neighbour_t {
 	public:
@@ -125,58 +125,12 @@ namespace cs{
       double y;
       double z;
       int mat;
-      std::string element;
+      int cat;
    };
 
   // Array for storing non-magnetic atoms
   extern std::vector<nm_atom_t> non_magnetic_atoms_array;
 
-	class catom_t {
-		public:
-
-			// Coordinates
-			double x;
-			double y;
-			double z;
-
-			// Flags
-			bool include;
-
-			// Integers
-			int material;
-			unsigned int uc_id;
-			int uc_category;
-			int lh_category;
-			int grain;
-			int supercell;
-			int mpi_type;
-			int mpi_cpuid;
-			int mpi_atom_number;
-			int mpi_old_atom_number;
-			int scx;
-			int scy;
-			int scz;
-
-			catom_t():
-				x(0.0),
-				y(0.0),
-				z(0.0),
-				include(false),
-				material(0),
-				uc_id(0),
-				uc_category(0),
-				lh_category(0),
-				grain(0),
-				supercell(0),
-				mpi_type(0),
-				mpi_cpuid(0),
-				mpi_atom_number(0),
-				mpi_old_atom_number(0),
-				scx(0),
-				scy(0),
-				scz(0)
-			{};
-};
 /// @brief This is the brief (one line only) description of the function.
 ///
 /// @section License
@@ -223,199 +177,8 @@ int create();
 ///
 int create_crystal_structure(std::vector<cs::catom_t> &);
 
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int create_system_type(std::vector<cs::catom_t> &);
-
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int create_neighbourlist(std::vector<cs::catom_t> &, std::vector<std::vector <neighbour_t> > &);
-
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int set_atom_vars(std::vector<cs::catom_t> &, std::vector<std::vector <neighbour_t> > &);
-
 int voronoi_film(std::vector<cs::catom_t> &);
 
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int bulk(std::vector<cs::catom_t> &);
-
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int cube(double[], std::vector<cs::catom_t> &,const int);
-
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int sphere(double[], std::vector<cs::catom_t> &,const int);
-
-extern void ellipsoid(double[], std::vector<cs::catom_t> &,const int);
-
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int cylinder(double[], std::vector<cs::catom_t> &,const int);
-
-/// @brief This is the brief (one line only) description of the function.
-///
-/// @section License
-/// Use of this code, either in source or compiled form, is subject to license from the authors.
-/// Copyright \htmlonly &copy \endhtmlonly Richard Evans, 2009-2010. All Rights Reserved.
-///
-/// @section Information
-/// @author  Richard Evans, rfle500@york.ac.uk
-/// @version 1.0
-/// @date    05/03/2010
-///
-/// @param[in] input variable
-/// @param[out] ouput variable
-/// @param[in,out] input/output variable
-/// @return variable returned from the function
-///
-/// @internal
-///	Created:		05/03/2010
-///	Revision:	  ---
-///=====================================================================================
-///
-int truncated_octahedron(double[], std::vector<cs::catom_t> &,const int);
-int tear_drop(double[], std::vector<cs::catom_t> &,const int);
-
-int sort_atoms_by_grain(std::vector<cs::catom_t> &);
-void clear_atoms(std::vector<cs::catom_t> &);
-
-void roughness(std::vector<cs::catom_t> &);
 void generate_multilayers(std::vector<cs::catom_t> & catom_array);
 
 }
@@ -425,9 +188,18 @@ void generate_multilayers(std::vector<cs::catom_t> & catom_array);
 //------------------------------------------------------------------------------
 namespace create{
 
+	// Variable for total number of atoms that are not filler
+	extern int num_total_atoms_non_filler;
+
+
 	// Functions
+   void initialize();
+   int create_system_type(std::vector<cs::catom_t> &);
 	bool match_material_parameter(std::string const word, std::string const value, std::string const unit, int const line, int const super_index, const int sub_index);
    bool match_input_parameter(std::string const key, std::string const word, std::string const value, std::string const unit, int const line);
+	double get_material_height_min(const int material);
+	double get_material_height_max(const int material);
+
 
 } // end of namespace create
 

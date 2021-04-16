@@ -40,7 +40,7 @@ namespace unitcell{
       double exchange_interaction_range = 1.0;
       double exchange_decay = 0.4; // Angstroms
 
-      exchange_type_t exchange_type = isotropic;
+      bool sublattice_materials = false; // flag to enable identification of atoms in simple crystals by material
 
    } // end of internal namespace
 

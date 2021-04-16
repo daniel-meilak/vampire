@@ -28,6 +28,7 @@
 #include <fstream>
 #include <string>
 #include <iostream>
+#include <sstream>
 #include <time.h>
 #include <sys/types.h>
 #ifdef WIN_COMPILE
@@ -39,16 +40,9 @@
 
 #include "vmpi.hpp"
 #include "material.hpp"
-
-#ifdef MPICF
-struct null_streambuf
-: public std::streambuf
-{
-  void overflow(char c)
-  {
-  }
-};
-#endif
+#include <iostream>
+#include <iomanip>
+#include <vector>
 
 // Global Output Streams
 extern std::ofstream zinfo;
@@ -76,11 +70,17 @@ namespace vin{
    extern void check_for_valid_value(double& value, std::string word, int line, std::string prefix, std::string unit, std::string unit_type,
                                      double range_min, double range_max, std::string input_file_type, std::string range_text);
 
+   extern void check_for_valid_positive_value(double& value, std::string word, int line, std::string prefix, std::string unit, std::string unit_type,
+                                              double range_min, double range_max, std::string input_file_type, std::string range_text);
+
    extern void check_for_valid_int(int& value, std::string word, int line, std::string prefix, int range_min, int range_max,
                                    std::string input_file_type, std::string range_text);
 
    extern void check_for_valid_int(  unsigned int& value, std::string word, int line, std::string prefix, unsigned int range_min,
                               unsigned int range_max, std::string input_file_type, std::string range_text);
+
+   extern void check_for_valid_int(  uint64_t& value, std::string word, int line, std::string prefix,
+                                     uint64_t range_min, uint64_t range_max, std::string input_file_type, std::string range_text);
 
    extern bool check_for_valid_bool( std::string value, std::string word, int line, std::string prefix, std::string input_file_type);
 
@@ -91,7 +91,14 @@ namespace vin{
    extern void check_for_valid_vector(std::vector<double>& u, std::string word, int line, std::string prefix, std::string unit, std::string unit_type,
                                       double range_min, double range_max, std::string input_file_type, std::string range_text);
 
-   extern std::vector<double> DoublesFromString(std::string value);
+   extern std::vector<double> doubles_from_string(std::string value);
+
+   // function to read file on master process and return a std::string of its contents
+   extern std::string get_string(std::string const filename, std::string source_file_name, int line);
+
+   // simple functions to extract variables from strings
+   extern uint64_t str_to_uint64(std::string input_str);
+   extern double str_to_double(std::string input_str);
 
    extern std::vector<mp::materials_t> read_material;
 
@@ -99,9 +106,10 @@ namespace vin{
 
 namespace vout{
 
+   extern bool custom_precision; // enable user selectable precision for data output
    extern unsigned int precision; // variable to control output precision (digits)
    extern bool fixed; // fixed precision output
-
+   extern bool header_option; // column headers
 	extern std::vector<unsigned int> file_output_list;
 	extern std::vector<unsigned int> screen_output_list;
 	extern std::vector<unsigned int> grain_output_list;
@@ -111,23 +119,6 @@ namespace vout{
 
    extern bool gnuplot_array_format;
 
-	extern bool output_atoms_config;
-	extern int output_atoms_config_rate;
-
-	extern double atoms_output_min[3];
-	extern double atoms_output_max[3];
-
-	extern double field_output_min_1;
-	extern double field_output_max_1;
-	extern double field_output_min_2;
-	extern double field_output_max_2;
-
-	extern bool output_cells_config;
-	extern int output_cells_config_rate;
-
-	extern bool output_grains_config;
-	extern int output_config_grain_rate;
-
 	//extern bool output_povray;
 	//extern int output_povray_rate;
 
@@ -135,18 +126,76 @@ namespace vout{
 	//extern int output_povray_cells_rate;
 
 	extern void data();
-	extern void config();
 	extern void zLogTsInit(std::string);
-
+    void output_switch(std::ostream&, unsigned int);
+    extern void write_out(std::ostream&,std::vector<unsigned int>&);
 	//extern int pov_file();
 
 	void redirect(std::ostream& strm, std::string filename);
 	void nullify(std::ostream& strm);
+
+    extern int fw_size;
+    extern int fw_size_int;
+    extern int max_header;
+
+//class that creates an object which acts like an output
+//stream but delivers fixed width output separated by
+//tabs
+//as a result, outputs that are part of one column 
+//should be concatenated before output, so as to 
+//prevent splitting out into multiple columns. 
+//to use you should use the output stream you
+//would normally be using as an argument during construction
+//and the width of your columns.
+//     e.g.
+//     std::ostringstream res;
+//     vout::fixed_width_output result(res,vout::fw_size);
+//you can then use the <<operator to send output to this
+//stream, but formatted.
+//     e.g.
+//     result << "ID" + std::to_string(mask_id);
+
+class fixed_width_output{
+  private:
+    int width; // the width of each output
+    std::ostringstream& stream_obj; // the initial stream object
+  public:
+    //constructor, calls constructors of width and stream_obj
+    //                                          :-> member initialization list
+    fixed_width_output(std::ostringstream& obj, int w): width(w),stream_obj(obj) {};
+
+    template<typename T> // sets up a template for using the operator<<
+
+    // defines a function which returns a pointer to the fixed... object
+    // takes one of type T as input.
+    fixed_width_output& operator<<(const T& output){ 
+      //sends the formatted output to a stream_obj
+      stream_obj <<std::left<<std::setw(width) << output <<"\t";
+
+      //returns the object (dereferenced from the pointer)
+      return *this;
+    }
+
+    // specialises the function, for when the input is an output stream 
+    // which is being operated on, such as using <<std::endl;
+    fixed_width_output& operator<<(std::ostringstream& (*func)(std::ostringstream&)){
+        func(stream_obj);
+        return *this;
+    };
+    std::string str(){
+        return stream_obj.str();
+    };
+};
 
 }
 
 // Checkpoint load/save functions
 void load_checkpoint();
 void save_checkpoint();
+
+namespace vio{
+   bool match_input_parameter(std::string const key, std::string const word, std::string const value, std::string const unit, int const line);
+
+}
 
 #endif /*VIO_H_*/

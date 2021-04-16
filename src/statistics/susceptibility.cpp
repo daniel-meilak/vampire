@@ -12,7 +12,7 @@
 #include <cmath>
 #include <iostream>
 #include <sstream>
-
+#include <string>
 // Vampire headers
 #include "errors.hpp"
 #include "stats.hpp"
@@ -24,7 +24,7 @@ namespace stats{
 //------------------------------------------------------------------------------------------------------
 // Constructor
 //------------------------------------------------------------------------------------------------------
-susceptibility_statistic_t::susceptibility_statistic_t (){}
+//susceptibility_statistic_t::susceptibility_statistic_t (){}
 
 //------------------------------------------------------------------------------------------------------
 // Function to initialize data structures
@@ -49,7 +49,7 @@ void susceptibility_statistic_t::initialize(stats::magnetization_statistic_t& ma
    mean_susceptibility_squared.resize(4*num_elements,0.0);
    mean_absolute_susceptibility.resize(4*num_elements,0.0);
    mean_absolute_susceptibility_squared.resize(4*num_elements,0.0);
-   
+
    // copy saturation data
    saturation = mag_stat.saturation;
 
@@ -88,17 +88,17 @@ void susceptibility_statistic_t::calculate(const std::vector<double>& magnetizat
       mean_susceptibility[4*id + 1]+=my*mm;
       mean_susceptibility[4*id + 2]+=mz*mm;
       mean_susceptibility[4*id + 3]+=mm;
-      
+
       mean_susceptibility_squared[4*id + 0]+=mx*mx*mm*mm;
       mean_susceptibility_squared[4*id + 1]+=my*my*mm*mm;
       mean_susceptibility_squared[4*id + 2]+=mz*mz*mm*mm;
       mean_susceptibility_squared[4*id + 3]+=mm*mm;
-      
+
       mean_absolute_susceptibility[4*id + 0]+=fabs(mx*mm);
       mean_absolute_susceptibility[4*id + 1]+=fabs(my*mm);
       mean_absolute_susceptibility[4*id + 2]+=fabs(mz*mm);
       mean_absolute_susceptibility[4*id + 3]+=mm;
-      
+
       mean_absolute_susceptibility_squared[4*id + 0]+=fabs(mx*mx*mm*mm);
       mean_absolute_susceptibility_squared[4*id + 1]+=fabs(my*my*mm*mm);
       mean_absolute_susceptibility_squared[4*id + 2]+=fabs(mz*mz*mm*mm);
@@ -133,11 +133,18 @@ void susceptibility_statistic_t::reset_averages(){
 //------------------------------------------------------------------------------------------------------
 // Function to output mean susceptibility values as string
 //------------------------------------------------------------------------------------------------------
-std::string susceptibility_statistic_t::output_mean_susceptibility(const double temperature){
+std::string susceptibility_statistic_t::output_mean_susceptibility(const double temperature,bool header){
 
    // result string stream
-   std::ostringstream result;
+   std::ostringstream res;
 
+   // set custom precision if enabled
+   if(vout::custom_precision){
+      res.precision(vout::precision);
+      if(vout::fixed) res.setf( std::ios::fixed, std::ios::floatfield );
+   }
+   vout::fixed_width_output result(res,vout::fw_size); 
+   if(!header){
    // determine inverse temperature mu_B/(kB T) (flushing to zero for very low temperatures)
    const double itemp = temperature < 1.e-300 ? 0.0 : 9.274e-24/(1.3806503e-23*temperature);
 
@@ -146,7 +153,7 @@ std::string susceptibility_statistic_t::output_mean_susceptibility(const double 
    const double imean_counter_sq = 1.0/(mean_counter*mean_counter);
 
    // loop over all elements
-   for(int id=0; id< num_elements; ++id){
+   for(int id=0; id< num_elements - 1; ++id){ // ignore last element as always contains non-magnetic atoms
 
       const double prefactor = itemp*saturation[id]; // in mu_B
       const double sus_x = prefactor*(mean_susceptibility_squared[4*id + 0]*imean_counter-mean_susceptibility[4*id + 0]*mean_susceptibility[4*id + 0]*imean_counter_sq);
@@ -154,10 +161,17 @@ std::string susceptibility_statistic_t::output_mean_susceptibility(const double 
       const double sus_z = prefactor*(mean_susceptibility_squared[4*id + 2]*imean_counter-mean_susceptibility[4*id + 2]*mean_susceptibility[4*id + 2]*imean_counter_sq);
       const double sus_m = prefactor*(mean_susceptibility_squared[4*id + 3]*imean_counter-mean_susceptibility[4*id + 3]*mean_susceptibility[4*id + 3]*imean_counter_sq);
 
-      result << sus_x << "\t" << sus_y << "\t" << sus_z << "\t" << sus_m << "\t";
+      result << sus_x << sus_y << sus_z << sus_m;
 
    }
-
+   }else{
+       for(int id=0; id< num_elements - 1; ++id){ // ignore last element as always contains non-magnetic atoms
+          result << name + std::to_string(id) + "_sus_x"
+                 << name + std::to_string(id) + "_sus_y"
+                 << name + std::to_string(id) + "_sus_z"
+                 << name + std::to_string(id) + "_sus_m";
+       }
+   }
    return result.str();
 
 }

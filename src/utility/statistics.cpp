@@ -46,7 +46,9 @@
 ///=====================================================================================
 ///
 // Headers
+#include "anisotropy.hpp"
 #include "atoms.hpp"
+#include "exchange.hpp"
 #include "gpu.hpp"
 #include "material.hpp"
 #include "errors.hpp"
@@ -74,30 +76,6 @@ namespace stats
    double inv_num_atoms;	/// 1.0/num_atoms
    double max_moment;		/// Total Maximum moment
 
-   // energy
-   double total_energy                    = 0.0;
-   double total_exchange_energy           = 0.0;
-   double total_anisotropy_energy         = 0.0;
-   double total_so_anisotropy_energy      = 0.0;
-   double total_lattice_anisotropy_energy = 0.0;
-   double total_cubic_anisotropy_energy   = 0.0;
-   double total_surface_anisotropy_energy = 0.0;
-   double total_applied_field_energy      = 0.0;
-   double total_magnetostatic_energy      = 0.0;
-
-   double mean_total_energy                    = 0.0;
-   double mean_total_exchange_energy           = 0.0;
-   double mean_total_anisotropy_energy         = 0.0;
-   double mean_total_so_anisotropy_energy      = 0.0;
-   double mean_total_lattice_anisotropy_energy = 0.0;
-   double mean_total_cubic_anisotropy_energy   = 0.0;
-   double mean_total_surface_anisotropy_energy = 0.0;
-   double mean_total_applied_field_energy      = 0.0;
-   double mean_total_magnetostatic_energy      = 0.0;
-
-   double energy_data_counter = 0.0;
-   bool calculate_energy = false;
-
 	// torque calculation
 	bool calculate_torque=false;
 	double total_system_torque[3]={0.0,0.0,0.0};
@@ -111,7 +89,7 @@ namespace stats
 
 	// function prototypes
 	void system_torque();
-	void system_energy();
+	//void system_energy();
 
 	bool is_initialised=false;
 
@@ -166,7 +144,7 @@ int mag_m(){
 
       // Calculate global moment for all CPUs
       #ifdef MPICF
-         MPI::COMM_WORLD.Allreduce(MPI_IN_PLACE,&stats::max_moment,1,MPI_DOUBLE,MPI_SUM);
+         MPI_Allreduce(MPI_IN_PLACE,&stats::max_moment,1,MPI_DOUBLE,MPI_SUM, MPI_COMM_WORLD);
       #endif
 
       // Resize arrays
@@ -180,13 +158,10 @@ int mag_m(){
    }
 
    // update statistics - need to eventually replace mag_m() with stats::update()...
-   stats::update(atoms::x_spin_array, atoms::y_spin_array, atoms::z_spin_array, atoms::m_spin_array);
+   stats::update(atoms::x_spin_array, atoms::y_spin_array, atoms::z_spin_array, atoms::m_spin_array, atoms::type_array, sim::temperature);
 
    // optionally calculate system torque
    if(stats::calculate_torque==true) stats::system_torque();
-
-   // optionally calculate energy
-   if(stats::calculate_energy==true) stats::system_energy();
 
    // increment data counter
    stats::data_counter+=1.0;
@@ -235,18 +210,6 @@ void mag_m_reset(){
 	}
 	stats::torque_data_counter=0.0;
 
-   // Reset energy data
-   stats::mean_total_energy                    = 0.0;
-   stats::mean_total_exchange_energy           = 0.0;
-   stats::mean_total_anisotropy_energy         = 0.0;
-   stats::mean_total_so_anisotropy_energy      = 0.0;
-   stats::mean_total_cubic_anisotropy_energy   = 0.0;
-   stats::mean_total_surface_anisotropy_energy = 0.0;
-   stats::mean_total_applied_field_energy      = 0.0;
-   stats::mean_total_magnetostatic_energy      = 0.0;
-
-   stats::energy_data_counter=0.0;
-
 }
 
 double max_torque(){
@@ -257,9 +220,6 @@ double max_torque(){
   ///                      Calculates total torque on the system
   ///
   ///================================================================================================
-
-  //real(kind=dp) :: H (1:3)
-  //real(kind=dp) :: S (1:3)
 
 	double max_torque=0.0;
 	double mag_torque;
@@ -294,7 +254,7 @@ double max_torque(){
 
    // find max torque on all nodes
    #ifdef MPICF
-      MPI::COMM_WORLD.Allreduce(MPI_IN_PLACE,&max_torque,1,MPI_DOUBLE,MPI_MAX);
+      MPI_Allreduce(MPI_IN_PLACE,&max_torque,1,MPI_DOUBLE,MPI_MAX, MPI_COMM_WORLD);
    #endif
 
   return max_torque;
@@ -341,10 +301,10 @@ void system_torque(){
 
 	// reduce torque on all nodes
 	#ifdef MPICF
-		MPI::COMM_WORLD.Allreduce(MPI_IN_PLACE,&torque[0],3,MPI_DOUBLE,MPI_SUM);
-		MPI::COMM_WORLD.Allreduce(MPI_IN_PLACE,&stats::sublattice_mean_torque_x_array[0],mp::num_materials,MPI_DOUBLE,MPI_SUM);
-		MPI::COMM_WORLD.Allreduce(MPI_IN_PLACE,&stats::sublattice_mean_torque_y_array[0],mp::num_materials,MPI_DOUBLE,MPI_SUM);
-		MPI::COMM_WORLD.Allreduce(MPI_IN_PLACE,&stats::sublattice_mean_torque_z_array[0],mp::num_materials,MPI_DOUBLE,MPI_SUM);
+		MPI_Allreduce(MPI_IN_PLACE,&torque[0],3,MPI_DOUBLE,MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE,&stats::sublattice_mean_torque_x_array[0],mp::num_materials,MPI_DOUBLE,MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE,&stats::sublattice_mean_torque_y_array[0],mp::num_materials,MPI_DOUBLE,MPI_SUM, MPI_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE,&stats::sublattice_mean_torque_z_array[0],mp::num_materials,MPI_DOUBLE,MPI_SUM, MPI_COMM_WORLD);
 	#endif
 
 	// Set stats values
@@ -359,288 +319,6 @@ void system_torque(){
 	stats::torque_data_counter+=1.0;
 	return;
 
-}
-
-///---------------------------------------------------------------------------
-///
-///                     Function to calculate system energy
-///
-///        Wraps the single spin energy functions used for MC calculation
-///
-///---------------------------------------------------------------------------
-void system_energy(){
-
-   // Reinitialise stats values
-   stats::total_energy=0.0;
-   stats::total_exchange_energy=0.0;
-   stats::total_anisotropy_energy=0.0;
-   stats::total_lattice_anisotropy_energy=0.0;
-   stats::total_so_anisotropy_energy=0.0;
-   stats::total_cubic_anisotropy_energy=0.0;
-   stats::total_surface_anisotropy_energy=0.0;
-   stats::total_applied_field_energy=0.0;
-   stats::total_magnetostatic_energy=0.0;
-
-   //------------------------------
-   // Calculate exchange energy
-   //------------------------------
-   if(atoms::exchange_type==0){ // Isotropic
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         double Sx=atoms::x_spin_array[atom];
-         double Sy=atoms::y_spin_array[atom];
-         double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_exchange_energy_isotropic(atom, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_exchange_energy=energy;
-   }
-   else if(atoms::exchange_type==1){ // Anisotropic
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         double Sx=atoms::x_spin_array[atom];
-         double Sy=atoms::y_spin_array[atom];
-         double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_exchange_energy_vector(atom, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_exchange_energy=energy;
-   }
-   else if(atoms::exchange_type==2){ // Tensor
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         double Sx=atoms::x_spin_array[atom];
-         double Sy=atoms::y_spin_array[atom];
-         double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_exchange_energy_tensor(atom, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_exchange_energy=energy;
-   }
-   //------------------------------
-   // Calculate anisotropy energy
-   //------------------------------
-   if(sim::AnisotropyType==0){ // Isotropic
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_scalar_anisotropy_energy(imaterial, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_anisotropy_energy=energy;
-   }
-   else if(sim::AnisotropyType==1){ // Tensor
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sx=atoms::x_spin_array[atom];
-         const double Sy=atoms::y_spin_array[atom];
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_tensor_anisotropy_energy(imaterial, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_anisotropy_energy=energy;
-   }
-   //------------------------------
-   // Calculate other energy
-   //------------------------------
-   if(sim::CubicScalarAnisotropy==true){
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sx=atoms::x_spin_array[atom];
-         const double Sy=atoms::y_spin_array[atom];
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_cubic_anisotropy_energy(imaterial, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_cubic_anisotropy_energy=energy;
-   }
-   if(sim::second_order_uniaxial_anisotropy){
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sx=atoms::x_spin_array[atom];
-         const double Sy=atoms::y_spin_array[atom];
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_second_order_uniaxial_anisotropy_energy(imaterial, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_so_anisotropy_energy=energy;
-   }
-   if(sim::lattice_anisotropy_flag){
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sx=atoms::x_spin_array[atom];
-         const double Sy=atoms::y_spin_array[atom];
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_lattice_anisotropy_energy(imaterial, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_lattice_anisotropy_energy=energy;
-   }
-   if(sim::surface_anisotropy==true){
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sx=atoms::x_spin_array[atom];
-         const double Sy=atoms::y_spin_array[atom];
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_surface_anisotropy_energy(atom, imaterial, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_surface_anisotropy_energy=energy;
-   }
-   {
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sx=atoms::x_spin_array[atom];
-         const double Sy=atoms::y_spin_array[atom];
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_applied_field_energy(Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_applied_field_energy=energy;
-   }
-   {
-      double energy=0.0;
-      for(int atom=0; atom<stats::num_atoms; atom++){
-         const double Sx=atoms::x_spin_array[atom];
-         const double Sy=atoms::y_spin_array[atom];
-         const double Sz=atoms::z_spin_array[atom];
-         const int imaterial=atoms::type_array[atom];
-         energy+=sim::spin_magnetostatic_energy(atom, Sx, Sy, Sz)*mp::material[imaterial].mu_s_SI;
-      }
-      stats::total_magnetostatic_energy=energy;
-   }
-
-   // Calculate total energy
-   stats::total_energy = stats::total_exchange_energy +
-                         stats::total_anisotropy_energy +
-                         stats::total_so_anisotropy_energy +
-                         stats::total_lattice_anisotropy_energy +
-                         stats::total_cubic_anisotropy_energy +
-                         stats::total_surface_anisotropy_energy +
-                         stats::total_applied_field_energy +
-                         stats::total_magnetostatic_energy;
-
-   // reduce energies to root node
-   #ifdef MPICF
-      // MPI_IN_PLACE is only valid on root process for MPI_Reduce()
-      // MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm)
-      if(vmpi::my_rank==0){
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_exchange_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_so_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_lattice_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_cubic_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_surface_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_applied_field_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(MPI_IN_PLACE, &stats::total_magnetostatic_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-      }
-      else{
-         MPI_Reduce(&stats::total_energy, &stats::total_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_exchange_energy, &stats::total_exchange_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_anisotropy_energy, &stats::total_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_so_anisotropy_energy, &stats::total_so_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_lattice_anisotropy_energy, &stats::total_lattice_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_cubic_anisotropy_energy, &stats::total_cubic_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_surface_anisotropy_energy, &stats::total_surface_anisotropy_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_applied_field_energy, &stats::total_applied_field_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-         MPI_Reduce(&stats::total_magnetostatic_energy, &stats::total_magnetostatic_energy, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-      }
-   #endif
-
-   // Add calculated values to mean
-   stats::mean_total_energy                    += stats::total_energy;
-   stats::mean_total_exchange_energy           += stats::total_exchange_energy;
-   stats::mean_total_anisotropy_energy         += stats::total_anisotropy_energy;
-   stats::mean_total_so_anisotropy_energy      += stats::total_so_anisotropy_energy;
-   stats::mean_total_lattice_anisotropy_energy += stats::total_lattice_anisotropy_energy;
-   stats::mean_total_cubic_anisotropy_energy   += stats::total_cubic_anisotropy_energy;
-   stats::mean_total_surface_anisotropy_energy += stats::total_surface_anisotropy_energy;
-   stats::mean_total_applied_field_energy      += stats::total_applied_field_energy;
-   stats::mean_total_magnetostatic_energy      += stats::total_magnetostatic_energy;
-
-   stats::energy_data_counter+=1.0;
-
-}
-
-///----------------------------------------------------------------------
-/// Master function to output energy variables to stream
-///----------------------------------------------------------------------
-void output_energy(std::ostream& stream, enum energy_t energy_type, enum stat_t stat_type){
-
-   switch(stat_type){
-      case total :
-      {
-         switch(energy_type){
-            case all :
-               stream << stats::total_energy << "\t";
-               break;
-            case exchange :
-               stream << stats::total_exchange_energy << "\t";
-               break;
-            case anisotropy :
-               stream << stats::total_anisotropy_energy << "\t";
-               break;
-            case cubic_anisotropy :
-               stream << stats::total_cubic_anisotropy_energy << "\t";
-               break;
-            case surface_anisotropy :
-               stream << stats::total_surface_anisotropy_energy << "\t";
-               break;
-            case applied_field :
-               stream << stats::total_applied_field_energy << "\t";
-               break;
-            case magnetostatic :
-               stream << stats::total_magnetostatic_energy << "\t";
-               break;
-            case second_order_anisotropy :
-               stream << stats::total_so_anisotropy_energy << "\t";
-               break;
-            default :
-               stream << "PE:Unknown:energy_t\t";
-               break;
-         }
-         break;
-      }
-      case mean :
-      {
-         switch(energy_type){
-            case all :
-               stream << stats::mean_total_energy/stats::energy_data_counter << "\t";
-               break;
-            case exchange :
-               stream << stats::mean_total_exchange_energy/stats::energy_data_counter << "\t";
-               break;
-            case anisotropy :
-               stream << stats::mean_total_anisotropy_energy/stats::energy_data_counter << "\t";
-               break;
-            case cubic_anisotropy :
-               stream << stats::mean_total_cubic_anisotropy_energy/stats::energy_data_counter << "\t";
-               break;
-            case surface_anisotropy :
-               stream << stats::mean_total_surface_anisotropy_energy/stats::energy_data_counter << "\t";
-               break;
-            case applied_field :
-               stream << stats::mean_total_applied_field_energy/stats::energy_data_counter << "\t";
-               break;
-            case magnetostatic :
-               stream << stats::mean_total_magnetostatic_energy/stats::energy_data_counter << "\t";
-               break;
-            case second_order_anisotropy :
-               stream << stats::mean_total_so_anisotropy_energy/stats::energy_data_counter << "\t";
-               break;
-            default :
-               stream << "PE:Unknown:energy_t\t";
-               break;
-         }
-         break;
-      }
-      default :
-         stream << "PE:Unknown:stat_t\t";
-         break;
-   }
-
-   return;
 }
 
 } // End of Namespace
